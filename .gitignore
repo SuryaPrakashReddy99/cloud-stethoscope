@@ -1,0 +1,9 @@
+# Local terraform trash
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# AWS keys (never ever push them)
+*.pem
+.env
