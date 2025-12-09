@@ -4,7 +4,7 @@ provider "aws" {
 
 # Bucket that will hold our pictures
 resource "aws_s3_bucket" "tf_state" {
-  bucket = "cs-tf-state-surya-2025" 
+  bucket = "cs-tf-state-surya-2025"
   versioning {
     enabled = true
   }
