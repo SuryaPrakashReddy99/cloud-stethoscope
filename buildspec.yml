@@ -1,0 +1,31 @@
+version: 0.2
+env:
+  variables:
+    REPO_URL: "https://github.com/vercel/next.js"   # hard-code for today
+phases:
+  install:
+    runtime-versions:
+      nodejs: 18
+    commands:
+      - npm install -g jq
+  pre_build:
+    commands:
+      - git clone $REPO_URL target_repo
+      - cd target_repo
+  build:
+    commands:
+      - echo "===== Security ====="
+      - cp ../scripts/security.sh . && ./security.sh
+      - echo "===== Coverage ====="
+      - cp ../scripts/coverage.sh . && ./coverage.sh
+      - echo "===== License ====="
+      - cp ../scripts/license.sh . && ./license.sh
+      - echo "===== Merge ====="
+      - jq -s 'add' security.json coverage.json license.json > report.json
+  post_build:
+    commands:
+      - echo "Uploading to S3"
+      - aws s3 cp report.json s3://cs-tf-state-surya-2025/reports/${CODEBUILD_BUILD_ID#*:}.json
+artifacts:
+  files:
+    - report.json
