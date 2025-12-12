@@ -1,49 +1,42 @@
-########################################
-# AWS Provider
-########################################
 provider "aws" {
   region = "us-east-1"
 }
 
-########################################
-# S3 Bucket for Terraform State
-########################################
+# S3 bucket (new-style)
 resource "aws_s3_bucket" "tf_state" {
   bucket = "cs-tf-state-surya-2025"
+}
 
-  versioning {
-    enabled = true
+resource "aws_s3_bucket_versioning" "tf_state" {
+  bucket = aws_s3_bucket.tf_state.id
+  versioning_configuration {
+    status = "Enabled"
   }
+}
 
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        sse_algorithm = "AES256"
-      }
+resource "aws_s3_bucket_server_side_encryption_configuration" "tf_state" {
+  bucket = aws_s3_bucket.tf_state.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
     }
   }
 }
 
-########################################
-# DynamoDB Table for State Locking
-########################################
+# DynamoDB lock table
 resource "aws_dynamodb_table" "tf_locks" {
   name         = "cs-tf-locks"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
-
   attribute {
     name = "LockID"
     type = "S"
   }
 }
 
-########################################
-# IAM Role for CodeBuild
-########################################
+# IAM role for CodeBuild
 resource "aws_iam_role" "codebuild_role" {
   name = "cs-codebuild-role"
-
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -53,44 +46,32 @@ resource "aws_iam_role" "codebuild_role" {
     }]
   })
 }
-
-# Attach AWS managed policy
 resource "aws_iam_role_policy_attachment" "codebuild_basic" {
   role       = aws_iam_role.codebuild_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AWSCodeBuildDeveloper"
+  policy_arn = "arn:aws:iam::aws:policy/AWSCodeBuildDeveloperAccess"  # fixed case
 }
 
-# Inline S3 upload policy
 resource "aws_iam_role_policy" "codebuild_s3" {
   name = "cs-s3-upload"
   role = aws_iam_role.codebuild_role.name
-
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
         Effect = "Allow"
-        Action = [
-          "s3:ListBucket",
-          "s3:GetBucketLocation"
-        ]
+        Action = ["s3:ListBucket", "s3:GetBucketLocation"]
         Resource = aws_s3_bucket.tf_state.arn
       },
       {
         Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-          "s3:GetObject"
-        ]
+        Action = ["s3:PutObject", "s3:GetObject"]
         Resource = "${aws_s3_bucket.tf_state.arn}/reports/*"
       }
     ]
   })
 }
 
-########################################
-# Permanent CodeBuild Project
-########################################
+# Permanent CodeBuild project
 resource "aws_codebuild_project" "repo_doctor" {
   name         = "cs-repo-doctor"
   service_role = aws_iam_role.codebuild_role.arn
@@ -109,6 +90,6 @@ resource "aws_codebuild_project" "repo_doctor" {
   }
 
   artifacts {
-    type = "NO_ARTIFACTS"   # we upload to S3 ourselves
+    type = "NO_ARTIFACTS"
   }
 }
