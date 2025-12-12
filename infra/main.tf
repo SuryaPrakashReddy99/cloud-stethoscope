@@ -25,7 +25,7 @@ resource "aws_s3_bucket" "tf_state" {
 }
 
 ########################################
-# DynamoDB Table for Terraform State Locking
+# DynamoDB Table for State Locking
 ########################################
 resource "aws_dynamodb_table" "tf_locks" {
   name         = "cs-tf-locks"
@@ -39,7 +39,7 @@ resource "aws_dynamodb_table" "tf_locks" {
 }
 
 ########################################
-# IAM Role for AWS CodeBuild
+# IAM Role for CodeBuild
 ########################################
 resource "aws_iam_role" "codebuild_role" {
   name = "cs-codebuild-role"
@@ -54,17 +54,13 @@ resource "aws_iam_role" "codebuild_role" {
   })
 }
 
-########################################
-# Attach AWS Managed CodeBuild Policy
-########################################
+# Attach AWS managed policy
 resource "aws_iam_role_policy_attachment" "codebuild_basic" {
   role       = aws_iam_role.codebuild_role.name
   policy_arn = "arn:aws:iam::aws:policy/AWSCodeBuildDeveloper"
 }
 
-########################################
-# Inline IAM Policy to Allow CodeBuild to Upload Report to S3
-########################################
+# Inline S3 upload policy
 resource "aws_iam_role_policy" "codebuild_s3" {
   name = "cs-s3-upload"
   role = aws_iam_role.codebuild_role.name
@@ -72,20 +68,17 @@ resource "aws_iam_role_policy" "codebuild_s3" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # Bucket-level permissions
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "s3:ListBucket",
           "s3:GetBucketLocation"
         ]
         Resource = aws_s3_bucket.tf_state.arn
       },
-
-      # Object-level permissions inside /reports/*
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "s3:PutObject",
           "s3:GetObject"
         ]
@@ -95,21 +88,27 @@ resource "aws_iam_role_policy" "codebuild_s3" {
   })
 }
 
+########################################
+# Permanent CodeBuild Project
+########################################
 resource "aws_codebuild_project" "repo_doctor" {
   name         = "cs-repo-doctor"
   service_role = aws_iam_role.codebuild_role.arn
+
   source {
     type      = "GITHUB"
     location  = "https://github.com/SuryaPrakashReddy99/cloud-stethoscope.git"
     buildspec = "buildspec.yml"
   }
+
   environment {
     type            = "LINUX_CONTAINER"
     compute_type    = "BUILD_GENERAL1_SMALL"
     image           = "aws/codebuild/standard:7.0"
     privileged_mode = false
   }
+
   artifacts {
-    type = "NO_ARTIFACTS"   # we already push to S3
+    type = "NO_ARTIFACTS"   # we upload to S3 ourselves
   }
 }
